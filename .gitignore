@@ -1,0 +1,9 @@
+*.mp4
+temp
+/build
+/.vscode
+/CMakeFiles
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+TerminalVideo
