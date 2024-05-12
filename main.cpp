@@ -20,8 +20,8 @@ int COLOR_MODE = 0;
 sf::Music audioBuffer;
 
 void onExit(int s) {
-	// Reset terminal colors
-	cout << "\033[0m\033[H\033[J" << endl;
+	// Reset terminal colors and formatting
+	cout << "\033[0m\033[H\033[J\033[?25h" << endl;
 
 	// Make sure to get rid of the temporary file from audio processing
 	std::remove("temp.wav");
@@ -244,7 +244,9 @@ int main(int argc, char *argv[]) {
 		if (COLOR_MODE == MODE_MONOCHROME) {
 			cout << "\033[37;40m";
 		}
-		cout << "\033[H"; // Sets cursor position to the top-left-most position
+		cout << "\033[H\033[?25l"; // Sets cursor position to the top-left-most position and makes the cursor not blink for betting looking text rendering
+
+		int lastJ = -1;
 
 		// For every character in the terminal
 		for (int i = 0; i < terminalSize.ws_row; ++i) {
@@ -261,6 +263,7 @@ int main(int argc, char *argv[]) {
 				
 				// Logic to prevent redrawing pixels that look the same between frames
 				// This is mostly useful for videos with borders of some sort (i.e. movies or music videos)
+				// Make sure not to do this to the first 8 lines to allow the notifications to be hidden
 				Vec3b pixelBottom = RGB.at<Vec3b>(
 					(int) (i * yScale) + ((int) yScale/2),
 					(int) (j * xScale)
@@ -268,14 +271,18 @@ int main(int argc, char *argv[]) {
 
 				int index = coordsToScreenBufferIndex(i, j, terminalSize.ws_row);
 				if (screenBufferInited) {
-					if (abs(screenBuffer[index + 0] - pixelBottom[0]) + abs(screenBuffer[index + 1] - pixelBottom[1]) + abs(screenBuffer[index + 2] - pixelBottom[2]) < 1) {
-						cout << "\033[1C";
+					if (i > 8 && abs(screenBuffer[index + 0] - pixelBottom[0]) + abs(screenBuffer[index + 1] - pixelBottom[1]) + abs(screenBuffer[index + 2] - pixelBottom[2]) < 1) {
+						//cout << "\033[1C";
 						continue;
 					}
 				}
 				screenBuffer[index + 0] = pixelBottom[0];
 				screenBuffer[index + 1] = pixelBottom[1];
 				screenBuffer[index + 2] = pixelBottom[2];
+
+				if (lastJ != j - 1) { // If the last character printed wasn't the previous one
+					cout << "\033[" << (j - lastJ) - 1 << "C";
+				}
 
 				if (COLOR_MODE == MODE_COLOR) {
 					// Obtain two pixels
@@ -297,7 +304,11 @@ int main(int argc, char *argv[]) {
 
 					// Set the background color to the top pixel, and the foreground color to the bottom pixel and print a half-block character
 					// This gives the illusion of having double vertical resolution, since a block character is usually 1:1 and a character 1:2
-					cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m" << "\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m▄\033[0m";
+					if (similarityBetweenPixels(pixelTop, pixelBottom) == 0) { // If the top and bottom pixels are the same, don't change both the background and foreground color
+						cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m ";
+					} else {
+						cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m" << "\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m▄";
+					}
 				} else if (COLOR_MODE == MODE_MONOCHROME) {
 					Vec3b pixel = RGB.at<Vec3b>(
 						(int) (i * yScale),
@@ -397,13 +408,17 @@ int main(int argc, char *argv[]) {
 
 					// Set the background color to the top pixel, and the foreground color to the bottom pixel and print a half-block character
 					// This gives the illusion of having double vertical resolution, since a block character is usually 1:1 and a character 1:2
-					cout << "\033[48;5;" << topColor << "m\033[38;5;" << bottomColor << "m▄\033[0m";
+					cout << "\033[48;5;" << topColor << "m\033[38;5;" << bottomColor << "m▄";
 				}
+
+				// Remember where the last character was printed
+				lastJ = j;
 			}
 
-			// If this isn't the last row, go to the next line
+			// If this isn't the last row, go to the next line and reset lastJ
 			if (i + 1 != terminalSize.ws_row) {
 				cout << endl;
+				lastJ = -1;
 			}
 		}
 
