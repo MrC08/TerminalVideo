@@ -82,12 +82,15 @@ int main(int argc, char *argv[]) {
 	// Help message
 	if (!std::string("--help").compare(argv[1])) {
 		cout << "TerinalVideo2" << endl;
-		cout << "Usage: " << argv[0] << " <video_name> [arguments]" << endl;
+		cout << "Usage: " << argv[0] << " <video_name> [arguments]" << endl << endl;
 		cout << "Arguments: " << endl;
 		cout << " --color-mode [mode]  -c [mode]     Set the color mode: m monochrome, c color, 256 256-compatability" << endl;
 		cout << " --help               -h            Display this help screen" << endl;
 		cout << " --offset [ms]        -o [ms]       Start [ms] milliseconds into the video" << endl;
-		cout << " --volume             -v [percent]  Set the volume in range 0% to 100%" << endl;
+		cout << " --volume             -v [percent]  Set the volume in range 0% to 100%" << endl << endl;
+		cout << "Controls: " << endl;
+		cout << " Left and right arrow keys			 Skip 5 seconds backward or forward respectively" << endl;
+		cout << " Up and down arrow keys			 Raise and lower the volume by 10% respectively" << endl;
 		exit(0);
 	}
 
