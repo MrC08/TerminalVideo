@@ -42,6 +42,14 @@ void onExit(int s) {
 	exit(1);
 }
 
+inline int coordsToScreenBufferIndex(int i, int j, int screenWidth) {
+	return (i * screenWidth + j) * 3;
+}
+
+inline int similarityBetweenPixels(Vec3b vec1, Vec3b vec2) {
+	return abs(vec1[0] - vec2[0]) + abs(vec1[1] - vec2[1]) + abs(vec1[2] - vec2[2]);
+}
+
 
 int main(int argc, char *argv[]) {
 	// Setup the onExit signal to properly close the program
@@ -162,6 +170,10 @@ int main(int argc, char *argv[]) {
 	bool wasUp = false;
 	bool wasDown = false;
 
+	// The screen buffer holds the previous frame and is checked against to prevent updating pixels that look the same between frames
+	uint8_t screenBuffer[terminalSize.ws_row * terminalSize.ws_col * 3];
+	bool screenBufferInited = false;
+
 	while (true) {
 		// Get the current time
 		auto time = std::chrono::system_clock::now();
@@ -246,16 +258,29 @@ int main(int argc, char *argv[]) {
 						}
 					}
 				}
+				
+				// Logic to prevent redrawing pixels that look the same between frames
+				// This is mostly useful for videos with borders of some sort (i.e. movies or music videos)
+				Vec3b pixelBottom = RGB.at<Vec3b>(
+					(int) (i * yScale) + ((int) yScale/2),
+					(int) (j * xScale)
+				);
+
+				int index = coordsToScreenBufferIndex(i, j, terminalSize.ws_row);
+				if (screenBufferInited) {
+					if (abs(screenBuffer[index + 0] - pixelBottom[0]) + abs(screenBuffer[index + 1] - pixelBottom[1]) + abs(screenBuffer[index + 2] - pixelBottom[2]) < 1) {
+						cout << "\033[1C";
+						continue;
+					}
+				}
+				screenBuffer[index + 0] = pixelBottom[0];
+				screenBuffer[index + 1] = pixelBottom[1];
+				screenBuffer[index + 2] = pixelBottom[2];
 
 				if (COLOR_MODE == MODE_COLOR) {
 					// Obtain two pixels
 					Vec3b pixelTop = RGB.at<Vec3b>(
 						(int) (i * yScale),
-						(int) (j * xScale)
-					);
-
-					Vec3b pixelBottom = RGB.at<Vec3b>(
-						(int) (i * yScale) + ((int) yScale/2),
 						(int) (j * xScale)
 					);
 
@@ -347,11 +372,6 @@ int main(int argc, char *argv[]) {
 						(int) (j * xScale)
 					);
 
-					Vec3b pixelBottom = RGB.at<Vec3b>(
-						(int) (i * yScale) + ((int) yScale/2),
-						(int) (j * xScale)
-					);
-
 					// Normalize colors 0-5
 					pixelTop[0] = (j % 2 == 1) ? round(pixelTop[0] / 51) : floor(pixelTop[0] / 51);
 					pixelTop[1] = (j % 2 == 1) ? round(pixelTop[1] / 51) : floor(pixelTop[1] / 51);
@@ -390,6 +410,8 @@ int main(int argc, char *argv[]) {
 		// Reset the color
 		cout << "\033[0m";
 
+		// Since the screen has been drawn, the screenBuffer must be initialized by now
+		screenBufferInited = true;
 
 		// Process and draw notifications
 		updateNotifications(2, 1000/FPS);
