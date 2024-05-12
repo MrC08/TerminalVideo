@@ -142,12 +142,12 @@ int main(int argc, char *argv[]) {
 	std::ostringstream command;
 	command << "ffmpeg -v error -stats -i ";
 	command << videoPath;
-	command << " -vn -f wav temp.wav -y";
+	command << " -vn -f wav ./temp.wav -y";
 	system(command.str().c_str());
 
-	rename("temp.wav", "temp"); // Rename the file to make it seem even more temporary
+	rename("./temp.wav", "./temp"); // Rename the file to make it seem even more temporary
 	
-	audioBuffer.openFromFile("temp");
+	audioBuffer.openFromFile("./temp");
 	audioBuffer.setPlayingOffset(sf::milliseconds(startOffset)); // Make sure to compensate for the offset
 	audioBuffer.setVolume(volume);
 	audioBuffer.play();
