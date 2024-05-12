@@ -2,6 +2,8 @@
 temp
 /build
 /.vscode
+/.git
+/opencv-4.x
 /CMakeFiles
 CMakeCache.txt
 cmake_install.cmake
