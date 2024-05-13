@@ -15,7 +15,10 @@ const int COLOR_REDUCE = -1;
 const int MODE_COLOR = 0;
 const int MODE_MONOCHROME = 1;
 const int MODE_256 = 2;
+const int MODE_ASCII_ART = 3;
 int COLOR_MODE = 0;
+
+const char ASCII_ART_GRADIENT[] = " .,-=+*/OQ&%@#NM";
 
 sf::Music audioBuffer;
 
@@ -88,6 +91,11 @@ int main(int argc, char *argv[]) {
 		cout << " --help               -h            Display this help screen" << endl;
 		cout << " --offset [ms]        -o [ms]       Start [ms] milliseconds into the video" << endl;
 		cout << " --volume             -v [percent]  Set the volume in range 0% to 100%" << endl << endl;
+		cout << "Color Modes: " << endl;
+		cout << " color				   c			 Uses full RGB" << endl;
+		cout << " 256-compatability	   256			 Uses a slightly more compatible 256 color palette, but looks much worse" << endl;
+		cout << " monochrome		   m			 Uses a set of basic, monochrome unicode characters; very compatible" << endl;
+		cout << " ascii-art			   a			 Makes the output look like ascii art; extremely high compatibilty" << endl << endl;
 		cout << "Controls: " << endl;
 		cout << " Left and right arrow keys			 Skip 5 seconds backward or forward respectively" << endl;
 		cout << " Up and down arrow keys			 Raise and lower the volume by 10% respectively" << endl;
@@ -114,6 +122,8 @@ int main(int argc, char *argv[]) {
 					COLOR_MODE = MODE_MONOCHROME;
 				} else if (argv[argIndex + 1][0] == ("2")[0]) {
 					COLOR_MODE = MODE_256;
+				} else if (argv[argIndex + 1][0] == ("a")[0]) {
+					COLOR_MODE = MODE_ASCII_ART;
 				}
 
 				argIndex++; // Make sure to increment one extra to skip the mode
@@ -412,6 +422,65 @@ int main(int argc, char *argv[]) {
 					// Set the background color to the top pixel, and the foreground color to the bottom pixel and print a half-block character
 					// This gives the illusion of having double vertical resolution, since a block character is usually 1:1 and a character 1:2
 					cout << "\033[48;5;" << topColor << "m\033[38;5;" << bottomColor << "m▄";
+				} else if (COLOR_MODE == MODE_ASCII_ART) {
+					Vec3b pixel = RGB.at<Vec3b>(
+						(int) (i * yScale),
+						(int) (j * xScale)
+					);
+
+					Vec3b pixelUp = Vec3b(255, 255, 255);
+					if (i != 0) {
+						pixelUp = RGB.at<Vec3b>(
+							(int) (i * yScale) - ((int) yScale/2),
+							(int) (j * xScale)
+						);
+					}
+
+					Vec3b pixelDown = Vec3b(255, 255, 255);
+					if (i + 1 != terminalSize.ws_row) {
+						Vec3b pixelDown = RGB.at<Vec3b>(
+							(int) (i * yScale) + ((int) yScale/2),
+							(int) (j * xScale)
+						);
+					}
+
+					// By mixing the colors like this, it closer mimics the grayscale color human eyes see, created a better looking grayscale
+					float grayScale = ((0.2125 * pixel[0]) + (0.7154 * pixel[1]) + (0.0721 * pixel[2]));
+					float grayScaleUp = ((0.2125 * pixelUp[0]) + (0.7154 * pixelUp[1]) + (0.0721 * pixelUp[2]));
+					float grayScaleDown = ((0.2125 * pixelDown[0]) + (0.7154 * pixelDown[1]) + (0.0721 * pixelDown[2]));
+
+					// Normalize the values 0-14 and dither
+					grayScale /= 8.534;
+					if (((int) round(grayScale)) % 2 == 1) {
+						if ((i + j) % 2 == 0 && grayScale - 0.4 > round(grayScale)) {
+							grayScale = round(grayScale - 1);
+						} else {
+							grayScale = round(grayScale + 1);
+						}
+					}
+
+					grayScale /= 2;
+					//  .,-=+*/OQ&%@#NM
+					/* Convert a value to a character of a certain brightness
+					string character;
+					int grayScaleInt = (int) grayScale;
+					if (grayScaleInt == 0) {
+						character = " ";
+					} else if (grayScaleInt == 1) {
+						character = ".";
+					} else if (grayScaleInt == 2) {
+						character = "░";
+					} else if (grayScaleInt == 3) {
+						character = "▒";
+					} else if (grayScaleInt == 4) {
+						character = "▓";
+					} else {
+						character = "█";
+					}*/
+
+					cout << ASCII_ART_GRADIENT[(int) grayScale];
+
+					// (0.2125 * color.r) + (0.7154 * color.g) + (0.0721 * color.b)
 				}
 
 				// Remember where the last character was printed

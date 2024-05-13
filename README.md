@@ -20,6 +20,8 @@ To access these color modes, use the `-c [mode]` or `--color-mode [mode]` argume
 	 - Uses a more compatible palette of 256 colors. This mode look the worst, but it can allow terminals that do not otherwise support RGB color to still show some color.
  - Monochrome (`m` or `monochrome`)
 	 - This mode renders the video in a way which resembles ASCII art. This mode is supported on every major terminal or console out there, as it only uses basic Unicode characters to get the job done.
+ - ASCII Art (`a` or `ascii-art`)
+	 - Makes the video look like ASCII art. This mode is extremely compatible, and should work on any terminal or console.
 
 ## Arguments ⚙️
 
