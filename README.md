@@ -22,17 +22,8 @@ To access these color modes, use the `-c [mode]` or `--color-mode [mode]` argume
 	 - This mode renders the video in a way which resembles ASCII art. This mode is supported on every major terminal or console out there, as it only uses basic Unicode characters to get the job done.
  - ASCII Art (`a` or `ascii-art`)
 	 - Makes the video look like ASCII art. This mode is extremely compatible, and should work on any terminal or console.
-
-## Arguments ⚙️
-
- - `-c [mode]` or `--color-mode [mode]`
-	 - Changes the color mode (see the *Color Modes* section).
- - `-h` or `-help`
-	 - Displays the help text
- - `-o [ms]` or `-offset [ms]`
-	 - Starts the video a specified number of milliseconds in.
- - `-v [percent]` or `--volume [percent]`
-	 - Sets the volume to a percent. Make sure not to include the percent sign!
+ - Full ASCII (`f` or `full-ascii`)
+	 - Uses a large set of ASCII characters to create a finer gradient. The effect works best with small text sizes. This mode is extremely compatible, and should work on any terminal or console.
 
 ## Controls ⌨️
 
