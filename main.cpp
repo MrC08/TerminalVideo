@@ -8,7 +8,6 @@
 #include "notif.cpp"
 
 using namespace cv;
-using namespace std;
 
 const int COLOR_REDUCE = -1;
 
@@ -16,9 +15,11 @@ const int MODE_COLOR = 0;
 const int MODE_MONOCHROME = 1;
 const int MODE_256 = 2;
 const int MODE_ASCII_ART = 3;
+const int MODE_ASCII_FULL = 4;
 int COLOR_MODE = 0;
 
 const char ASCII_ART_GRADIENT[] = " .,-=+*/OQ&%@#NM";
+const char ASCII_FULL_GRADIENT[] = " `.-'\",:~_;!|^><+r*?=\\L/v()ic7x1z{tJ}lsT[]FnuCYjofy2ae3I5VSkwZ4mXPGhEqpAK6$bd9HODRgMUW%8N0&B#Q@";
 
 sf::Music audioBuffer;
 
@@ -53,7 +54,6 @@ inline int similarityBetweenPixels(Vec3b vec1, Vec3b vec2) {
 	return abs(vec1[0] - vec2[0]) + abs(vec1[1] - vec2[1]) + abs(vec1[2] - vec2[2]);
 }
 
-
 int main(int argc, char *argv[]) {
 	// Setup the onExit signal to properly close the program
 	struct sigaction sigIntHandler;
@@ -82,23 +82,34 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	bool debugMode = false;
+	
+	bool useKeyboard = true;
+	bool useAudio = true;
+	bool useUnicode = true;
+
 	// Help message
-	if (!std::string("--help").compare(argv[1])) {
+	if (!std::string("--help").compare(argv[1]) || !std::string("-h").compare(argv[1])) {
 		cout << "TerinalVideo2" << endl;
 		cout << "Usage: " << argv[0] << " <video_name> [arguments]" << endl << endl;
 		cout << "Arguments: " << endl;
 		cout << " --color-mode [mode]  -c [mode]     Set the color mode: m monochrome, c color, 256 256-compatability" << endl;
+		cout << " --debug              -d            Print extra status messages to help diagnose issues" << endl;
 		cout << " --help               -h            Display this help screen" << endl;
+		cout << " --no-audio           -na           Removes audio, can help with compatibility" << endl;
+		cout << " --no-keyboard        -nk           Removes keyboard control, can help with compatibility" << endl;
+		cout << " --no-unicode         -nu           Replaces unicode characters in certain color modes, can help with compatibility" << endl;
 		cout << " --offset [ms]        -o [ms]       Start [ms] milliseconds into the video" << endl;
 		cout << " --volume             -v [percent]  Set the volume in range 0% to 100%" << endl << endl;
 		cout << "Color Modes: " << endl;
-		cout << " color				   c			 Uses full RGB" << endl;
-		cout << " 256-compatability	   256			 Uses a slightly more compatible 256 color palette, but looks much worse" << endl;
-		cout << " monochrome		   m			 Uses a set of basic, monochrome unicode characters; very compatible" << endl;
-		cout << " ascii-art			   a			 Makes the output look like ascii art; extremely high compatibilty" << endl << endl;
+		cout << " color                 c            Uses full RGB" << endl;
+		cout << " 256-compatability     256          Uses a slightly more compatible 256 color palette, but looks much worse" << endl;
+		cout << " monochrome            m            Uses a set of basic, monochrome unicode characters; very compatible" << endl;
+		cout << " ascii-art             a            Makes the output look like ascii art; extremely high compatibilty" << endl;
+		cout << " full-ascii            f            Uses a large set of ascii characters to create a finer gradient; extremely high compatibility" << endl << endl;
 		cout << "Controls: " << endl;
-		cout << " Left and right arrow keys			 Skip 5 seconds backward or forward respectively" << endl;
-		cout << " Up and down arrow keys			 Raise and lower the volume by 10% respectively" << endl;
+		cout << " Left and right arrow keys          Skip 5 seconds backward or forward respectively" << endl;
+		cout << " Up and down arrow keys             Raise and lower the volume by 10% respectively" << endl;
 		exit(0);
 	}
 
@@ -124,9 +135,19 @@ int main(int argc, char *argv[]) {
 					COLOR_MODE = MODE_256;
 				} else if (argv[argIndex + 1][0] == ("a")[0]) {
 					COLOR_MODE = MODE_ASCII_ART;
+				} else if (argv[argIndex + 1][0] == ("f")[0]) {
+					COLOR_MODE = MODE_ASCII_FULL;
 				}
 
 				argIndex++; // Make sure to increment one extra to skip the mode
+			} else if (!std::string("-d").compare(argv[argIndex]) || !std::string("--debug").compare(argv[argIndex])) {
+				debugMode = true;
+			} else if (!std::string("-nk").compare(argv[argIndex]) || !std::string("--no-keyboard").compare(argv[argIndex])) {
+				useKeyboard = false;
+			} else if (!std::string("-na").compare(argv[argIndex]) || !std::string("--no-audio").compare(argv[argIndex])) {
+				useAudio = false;
+			} else if (!std::string("-nu").compare(argv[argIndex]) || !std::string("--no-unicode").compare(argv[argIndex])) {
+				useUnicode = false;
 			} else {
 				cout << "Invalid argument: " << argv[argIndex] << endl;
 				exit(0);
@@ -144,26 +165,37 @@ int main(int argc, char *argv[]) {
 
 	if(!capture.open(videoPath))
 	{
-		cout<<"Video Not Found"<<endl;
+		cout << "Video not found, is unreadable, or in wrong format!"<<endl;
 		return 1;
 	}
 
 
-	// Use ffmpeg to extract the audio from the video
-	cout << "Getting audio..." << endl;
+	if (useAudio) {
+		// Use ffmpeg to extract the audio from the video
+		cout << "Getting audio..." << endl;
 
-	std::ostringstream command;
-	command << "ffmpeg -v error -stats -i ";
-	command << videoPath;
-	command << " -vn -f wav ./temp.wav -y";
-	system(command.str().c_str());
+		std::ostringstream command;
+		command << "ffmpeg -v error -stats -i ";
+		command << videoPath;
+		command << " -vn -f wav ./temp.wav -y";
+		system(command.str().c_str());
+		
+		if (debugMode)
+			cout << "Renaming temp file..." << endl;
 
-	rename("./temp.wav", "./temp"); // Rename the file to make it seem even more temporary
+		rename("./temp.wav", "./temp"); // Rename the file to make it seem even more temporary
+		
+		if (debugMode)
+			cout << "Opening audio file with SFML..." << endl;
+			
+		audioBuffer.openFromFile("./temp");
+		audioBuffer.setPlayingOffset(sf::milliseconds(startOffset)); // Make sure to compensate for the offset
+		audioBuffer.setVolume(volume);
+		audioBuffer.play();
+	}
 	
-	audioBuffer.openFromFile("./temp");
-	audioBuffer.setPlayingOffset(sf::milliseconds(startOffset)); // Make sure to compensate for the offset
-	audioBuffer.setVolume(volume);
-	audioBuffer.play();
+	if (debugMode)
+		cout << "Calculating time-related variables..." << endl;
 
 	const int FPS = capture.get(cv::CAP_PROP_FPS);
 
@@ -193,48 +225,52 @@ int main(int argc, char *argv[]) {
 		auto since_epoch = time.time_since_epoch();
 		auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(since_epoch);
 
-		// Skipping 5 seconds logic
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) && !wasLeft) {
-			wasLeft = true;
-			startOffset -= 5000;
-			if (millis.count() - (originalMillis.count() - startOffset) < 0) {
-				startOffset -= millis.count() - (originalMillis.count() - startOffset);
-			} 
-			start = originalMillis.count() - startOffset;
-			audioBuffer.setPlayingOffset(sf::milliseconds(startOffset + (millis.count() - originalMillis.count())));
-			
-			addNotification(new Notification("Skipped 5 seconds back"));
-		} else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) && !wasRight) {
-			wasRight = true;
-			startOffset += 5000;
-			start = originalMillis.count() - startOffset;
-			audioBuffer.setPlayingOffset(sf::milliseconds(startOffset + (millis.count() - originalMillis.count())));
-			
-			addNotification(new Notification("Skipped 5 seconds forward"));
+		if (useKeyboard) {
+			// Skipping 5 seconds logic
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) && !wasLeft) {
+				wasLeft = true;
+				startOffset -= 5000;
+				if (millis.count() - (originalMillis.count() - startOffset) < 0) {
+					startOffset -= millis.count() - (originalMillis.count() - startOffset);
+				} 
+				start = originalMillis.count() - startOffset;
+				if (useAudio)
+					audioBuffer.setPlayingOffset(sf::milliseconds(startOffset + (millis.count() - originalMillis.count())));
+				
+				addNotification(new Notification("Skipped 5 seconds back"));
+			} else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) && !wasRight) {
+				wasRight = true;
+				startOffset += 5000;
+				start = originalMillis.count() - startOffset;
+				if (useAudio)
+					audioBuffer.setPlayingOffset(sf::milliseconds(startOffset + (millis.count() - originalMillis.count())));
+				
+				addNotification(new Notification("Skipped 5 seconds forward"));
+			}
+
+			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Left) && wasLeft)	wasLeft = false;
+			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Right) && wasRight)	wasRight = false;
+
+			// Changing volume logic
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) && !wasUp && useAudio) {
+				wasUp = true;
+				volume += 10;
+				if (volume > 100) volume = 100;
+				audioBuffer.setVolume(volume);
+				
+				addNotification(new Notification("Volume raised to " + to_string((int) volume) + "%"));
+			} else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) && !wasDown && useAudio) {
+				wasDown = true;
+				volume -= 10;
+				if (volume < 0) volume = 0;
+				audioBuffer.setVolume(volume);
+				
+				addNotification(new Notification("Volume lowered to " + to_string((int) volume) + "%"));
+			}
+
+			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Up) && wasUp)	wasUp = false;
+			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Down) && wasDown)	wasDown = false;
 		}
-
-		if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Left) && wasLeft)	wasLeft = false;
-		if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Right) && wasRight)	wasRight = false;
-
-		// Changing volume logic
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) && !wasUp) {
-			wasUp = true;
-			volume += 10;
-			if (volume > 100) volume = 100;
-			audioBuffer.setVolume(volume);
-			
-			addNotification(new Notification("Volume raised to " + to_string((int) volume) + "%"));
-		} else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) && !wasDown) {
-			wasDown = true;
-			volume -= 10;
-			if (volume < 0) volume = 0;
-			audioBuffer.setVolume(volume);
-			
-			addNotification(new Notification("Volume lowered to " + to_string((int) volume) + "%"));
-		}
-
-		if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Up) && wasUp)	wasUp = false;
-		if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Down) && wasDown)	wasDown = false;
 
 		// Read a specific frame from the video using the current time
 		capture.set(cv::CAP_PROP_POS_MSEC, millis.count() - start);
@@ -284,8 +320,7 @@ int main(int argc, char *argv[]) {
 
 				int index = coordsToScreenBufferIndex(i, j, terminalSize.ws_row);
 				if (screenBufferInited) {
-					if (i > 8 && abs(screenBuffer[index + 0] - pixelBottom[0]) + abs(screenBuffer[index + 1] - pixelBottom[1]) + abs(screenBuffer[index + 2] - pixelBottom[2]) < 1) {
-						//cout << "\033[1C";
+					if (i > 8 && abs(screenBuffer[index + 0] - pixelBottom[0]) + abs(screenBuffer[index + 1] - pixelBottom[1]) + abs(screenBuffer[index + 2] - pixelBottom[2]) < 2) {
 						continue;
 					}
 				}
@@ -298,7 +333,7 @@ int main(int argc, char *argv[]) {
 				}
 
 				if (COLOR_MODE == MODE_COLOR) {
-					// Obtain two pixels
+					// Obtain a second pixel
 					Vec3b pixelTop = RGB.at<Vec3b>(
 						(int) (i * yScale),
 						(int) (j * xScale)
@@ -320,7 +355,11 @@ int main(int argc, char *argv[]) {
 					if (similarityBetweenPixels(pixelTop, pixelBottom) == 0) { // If the top and bottom pixels are the same, don't change both the background and foreground color
 						cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m ";
 					} else {
-						cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m" << "\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m▄";
+						if (useUnicode) {
+							cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m" << "\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m▄";
+						} else {
+							cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m" << "\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m_";
+						}
 					}
 				} else if (COLOR_MODE == MODE_MONOCHROME) {
 					Vec3b pixel = RGB.at<Vec3b>(
@@ -349,12 +388,22 @@ int main(int argc, char *argv[]) {
 					float grayScaleUp = ((0.2125 * pixelUp[0]) + (0.7154 * pixelUp[1]) + (0.0721 * pixelUp[2]));
 					float grayScaleDown = ((0.2125 * pixelDown[0]) + (0.7154 * pixelDown[1]) + (0.0721 * pixelDown[2]));
 
-					if (grayScale > 240 && grayScaleUp < 16) {
-						cout << "▄";
-						continue;
-					} else if (grayScale > 240 && grayScaleDown < 16) {
-						cout << "▀";
-						continue;
+					if (useUnicode) {
+						if (grayScale > 240 && grayScaleUp < 16) {
+							cout << "▄";
+							continue;
+						} else if (grayScale > 240 && grayScaleDown < 16) {
+							cout << "▀";
+							continue;
+						}
+					} else {
+						if (grayScale > 240 && grayScaleUp < 16) {
+							cout << ",";
+							continue;
+						} else if (grayScale > 240 && grayScaleDown < 16) {
+							cout << "'";
+							continue;
+						}
 					}
 
 					// Normalize the values 0-5 and dither
@@ -421,7 +470,11 @@ int main(int argc, char *argv[]) {
 
 					// Set the background color to the top pixel, and the foreground color to the bottom pixel and print a half-block character
 					// This gives the illusion of having double vertical resolution, since a block character is usually 1:1 and a character 1:2
-					cout << "\033[48;5;" << topColor << "m\033[38;5;" << bottomColor << "m▄";
+					if (useUnicode) {
+						cout << "\033[48;5;" << topColor << "m\033[38;5;" << bottomColor << "m▄";
+					} else {
+						cout << "\033[48;5;" << topColor << "m\033[38;5;" << bottomColor << "m_";
+					}
 				} else if (COLOR_MODE == MODE_ASCII_ART) {
 					Vec3b pixel = RGB.at<Vec3b>(
 						(int) (i * yScale),
@@ -446,8 +499,6 @@ int main(int argc, char *argv[]) {
 
 					// By mixing the colors like this, it closer mimics the grayscale color human eyes see, created a better looking grayscale
 					float grayScale = ((0.2125 * pixel[0]) + (0.7154 * pixel[1]) + (0.0721 * pixel[2]));
-					float grayScaleUp = ((0.2125 * pixelUp[0]) + (0.7154 * pixelUp[1]) + (0.0721 * pixelUp[2]));
-					float grayScaleDown = ((0.2125 * pixelDown[0]) + (0.7154 * pixelDown[1]) + (0.0721 * pixelDown[2]));
 
 					// Normalize the values 0-14 and dither
 					grayScale /= 8.534;
@@ -460,25 +511,48 @@ int main(int argc, char *argv[]) {
 					}
 
 					grayScale /= 2;
-					//  .,-=+*/OQ&%@#NM
-					/* Convert a value to a character of a certain brightness
-					string character;
-					int grayScaleInt = (int) grayScale;
-					if (grayScaleInt == 0) {
-						character = " ";
-					} else if (grayScaleInt == 1) {
-						character = ".";
-					} else if (grayScaleInt == 2) {
-						character = "░";
-					} else if (grayScaleInt == 3) {
-						character = "▒";
-					} else if (grayScaleInt == 4) {
-						character = "▓";
-					} else {
-						character = "█";
-					}*/
 
 					cout << ASCII_ART_GRADIENT[(int) grayScale];
+
+					// (0.2125 * color.r) + (0.7154 * color.g) + (0.0721 * color.b)
+				} else if (COLOR_MODE == MODE_ASCII_FULL) {
+					Vec3b pixel = RGB.at<Vec3b>(
+						(int) (i * yScale),
+						(int) (j * xScale)
+					);
+
+					Vec3b pixelUp = Vec3b(255, 255, 255);
+					if (i != 0) {
+						pixelUp = RGB.at<Vec3b>(
+							(int) (i * yScale) - ((int) yScale/2),
+							(int) (j * xScale)
+						);
+					}
+
+					Vec3b pixelDown = Vec3b(255, 255, 255);
+					if (i + 1 != terminalSize.ws_row) {
+						Vec3b pixelDown = RGB.at<Vec3b>(
+							(int) (i * yScale) + ((int) yScale/2),
+							(int) (j * xScale)
+						);
+					}
+
+					// By mixing the colors like this, it closer mimics the grayscale color human eyes see, created a better looking grayscale
+					float grayScale = ((0.2125 * pixel[0]) + (0.7154 * pixel[1]) + (0.0721 * pixel[2]));
+
+					// Normalize the values 0-94 and dither
+					grayScale /= 1.347368421;
+					if (((int) round(grayScale)) % 2 == 1) {
+						if ((i + j) % 2 == 0 && grayScale - 0.4 > round(grayScale)) {
+							grayScale = round(grayScale - 1);
+						} else {
+							grayScale = round(grayScale + 1);
+						}
+					}
+
+					grayScale /= 2;
+
+					cout << ASCII_FULL_GRADIENT[(int) grayScale];
 
 					// (0.2125 * color.r) + (0.7154 * color.g) + (0.0721 * color.b)
 				}
