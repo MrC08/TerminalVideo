@@ -16,10 +16,14 @@ const int MODE_MONOCHROME = 1;
 const int MODE_256 = 2;
 const int MODE_ASCII_ART = 3;
 const int MODE_ASCII_FULL = 4;
-int COLOR_MODE = 0;
+const int MODE_DYNAMIC_RESOLUTION = 4;
+int COLOR_MODE = MODE_DYNAMIC_RESOLUTION;
 
 const char ASCII_ART_GRADIENT[] = " .,-=+*/OQ&%@#NM";
 const char ASCII_FULL_GRADIENT[] = " `.-'\",:~_;!|^><+r*?=\\L/v()ic7x1z{tJ}lsT[]FnuCYjofy2ae3I5VSkwZ4mXPGhEqpAK6$bd9HODRgMUW%8N0&B#Q@";
+
+const string BLOCK_HEIGHT_GRADIENT[] = {"▇", "▆", "▅", "▄", "▃", "▂", "▁"};
+const string BLOCK_WIDTH_GRADIENT[] = {"▉", "▊", "▋", "▌", "▍", "▎", "▏"};
 
 sf::Music audioBuffer;
 
@@ -52,6 +56,24 @@ inline int coordsToScreenBufferIndex(int i, int j, int screenWidth) {
 
 inline int similarityBetweenPixels(Vec3b vec1, Vec3b vec2) {
 	return abs(vec1[0] - vec2[0]) + abs(vec1[1] - vec2[1]) + abs(vec1[2] - vec2[2]);
+}
+
+inline float similarityBetweenPixelsf(Vec3b vec1, Vec3b vec2) {
+	return (float) (abs(vec1[0] - vec2[0]) + abs(vec1[1] - vec2[1]) + abs(vec1[2] - vec2[2]));
+}
+
+inline Vec3b averagePixels(Vec3b vec1, Vec3b vec2) {
+	return Vec3b(vec1[0] + vec2[0], vec1[1] + vec2[1], vec1[2] + vec2[2]) / 2.0;
+}
+inline Vec3b averagePixels(Vec3b vec1, Vec3b vec2, Vec3b vec3) {
+	return Vec3b(vec1[0] + vec2[0] + vec3[0], vec1[1] + vec2[1] + vec3[1], vec1[2] + vec2[2] + vec3[2]) / 3.0;
+}
+
+inline Vec3b averagePixelsi(Vec3b vec1, Vec3b vec2) {
+	return Vec3b((int) (vec1[0] + vec2[0]) / 2, (int) (vec1[1] + vec2[1]) / 2, (int) (vec1[2] + vec2[2]) / 2);
+}
+inline Vec3b averagePixelsi(Vec3b vec1, Vec3b vec2, Vec3b vec3) {
+	return Vec3b((int) (vec1[0] + vec2[0] + vec3[0]) / 3, (int) (vec1[1] + vec2[1] + vec3[1]) / 3, (int) (vec1[2] + vec2[2] + vec3[2]) / 3);
 }
 
 int main(int argc, char *argv[]) {
@@ -103,6 +125,7 @@ int main(int argc, char *argv[]) {
 		cout << " --volume             -v [percent]  Set the volume in range 0% to 100%" << endl << endl;
 		cout << "Color Modes: " << endl;
 		cout << " color                 c            Uses full RGB" << endl;
+		cout << " dynamic               d            Uses full color RGB, and tries to increase resolution using unicode characters; lowest compatibility, but nicest visuals" << endl;
 		cout << " 256-compatability     256          Uses a slightly more compatible 256 color palette, but looks much worse" << endl;
 		cout << " monochrome            m            Uses a set of basic, monochrome unicode characters; very compatible" << endl;
 		cout << " ascii-art             a            Makes the output look like ascii art; extremely high compatibilty" << endl;
@@ -137,6 +160,8 @@ int main(int argc, char *argv[]) {
 					COLOR_MODE = MODE_ASCII_ART;
 				} else if (argv[argIndex + 1][0] == ("f")[0]) {
 					COLOR_MODE = MODE_ASCII_FULL;
+				} else if (argv[argIndex + 1][0] == ("d")[0]) {
+					COLOR_MODE = MODE_DYNAMIC_RESOLUTION;
 				}
 
 				argIndex++; // Make sure to increment one extra to skip the mode
@@ -163,8 +188,7 @@ int main(int argc, char *argv[]) {
 
 	string videoPath = argv[1];
 
-	if(!capture.open(videoPath))
-	{
+	if (!capture.open(videoPath)) {
 		cout << "Video not found, is unreadable, or in wrong format!"<<endl;
 		return 1;
 	}
@@ -319,7 +343,7 @@ int main(int argc, char *argv[]) {
 				);
 
 				int index = coordsToScreenBufferIndex(i, j, terminalSize.ws_row);
-				if (screenBufferInited) {
+				if (screenBufferInited && COLOR_MODE != MODE_DYNAMIC_RESOLUTION) {
 					if (i > 8 && abs(screenBuffer[index + 0] - pixelBottom[0]) + abs(screenBuffer[index + 1] - pixelBottom[1]) + abs(screenBuffer[index + 2] - pixelBottom[2]) < 2) {
 						continue;
 					}
@@ -332,7 +356,134 @@ int main(int argc, char *argv[]) {
 					cout << "\033[" << (j - lastJ) - 1 << "C";
 				}
 
-				if (COLOR_MODE == MODE_COLOR) {
+				if (COLOR_MODE == MODE_DYNAMIC_RESOLUTION) {
+					// Obtain a second pixel
+					Vec3b pixelTop = RGB.at<Vec3b>(
+						(int) (i * yScale),
+						(int) (j * xScale)
+					);
+
+					Vec3b pixelTopR = RGB.at<Vec3b>(
+						(int) (i * yScale),
+						(int) (j * xScale) + ((int) xScale/2)
+					);
+
+					Vec3b pixelBottomR = RGB.at<Vec3b>(
+						(int) (i * yScale) + ((int) yScale/2),
+						(int) (j * xScale) + ((int) xScale/2)
+					);
+
+					// If color reduction is enabled, process that
+					if (COLOR_REDUCE > 0) {
+						float dither = (float) ((i + j) % 2) / 2.1;
+						pixelTop[0] = roundf(pixelTop[0] / COLOR_REDUCE + dither) * COLOR_REDUCE;
+						pixelTop[1] = roundf(pixelTop[1] / COLOR_REDUCE + dither) * COLOR_REDUCE;
+						pixelTop[2] = roundf(pixelTop[2] / COLOR_REDUCE + dither) * COLOR_REDUCE;
+						pixelBottom[0] = roundf(pixelBottom[0] / COLOR_REDUCE - dither) * COLOR_REDUCE;
+						pixelBottom[1] = roundf(pixelBottom[1] / COLOR_REDUCE - dither) * COLOR_REDUCE;
+						pixelBottom[2] = roundf(pixelBottom[2] / COLOR_REDUCE - dither) * COLOR_REDUCE;
+						pixelTopR[0] = roundf(pixelTopR[0] / COLOR_REDUCE + dither) * COLOR_REDUCE;
+						pixelTopR[1] = roundf(pixelTopR[1] / COLOR_REDUCE + dither) * COLOR_REDUCE;
+						pixelTopR[2] = roundf(pixelTopR[2] / COLOR_REDUCE + dither) * COLOR_REDUCE;
+						pixelBottomR[0] = roundf(pixelBottomR[0] / COLOR_REDUCE - dither) * COLOR_REDUCE;
+						pixelBottomR[1] = roundf(pixelBottomR[1] / COLOR_REDUCE - dither) * COLOR_REDUCE;
+						pixelBottomR[2] = roundf(pixelBottomR[2] / COLOR_REDUCE - dither) * COLOR_REDUCE;
+					}
+
+					float verticalSplit = similarityBetweenPixelsf(averagePixels(pixelTop, pixelTopR), averagePixels(pixelBottom, pixelBottomR));
+					float horizontalSplit = similarityBetweenPixelsf(averagePixels(pixelTop, pixelBottom), averagePixels(pixelTopR, pixelBottomR));
+					float diagonalSplit = similarityBetweenPixelsf(averagePixels(pixelTop, pixelBottomR), averagePixels(pixelTopR, pixelBottom));
+					float topLeft = similarityBetweenPixelsf(pixelTop, averagePixels(pixelTopR, pixelBottom, pixelBottomR)) * 0.035;
+					float topRight = similarityBetweenPixelsf(pixelTopR, averagePixels(pixelTop, pixelBottom, pixelBottomR)) * 0.035;
+					float bottomLeft = similarityBetweenPixelsf(pixelBottom, averagePixels(pixelTopR, pixelTop, pixelBottomR)) * 0.035;
+					float bottomRight = similarityBetweenPixelsf(pixelBottomR, averagePixels(pixelTop, pixelTopR, pixelBottom)) * 0.035;
+
+					if (
+						verticalSplit > horizontalSplit && verticalSplit > diagonalSplit &&
+						verticalSplit > topRight && verticalSplit > topLeft &&
+						verticalSplit > bottomLeft && verticalSplit > bottomRight
+					) {
+						float differences[7];
+						for (int k = 1; k < 8; k++) {
+							Vec3b pixel = RGB.at<Vec3b>(
+								(int) (i * yScale) + ((int) (((float) k) * yScale/8)),
+								(int) (j * xScale)
+							);
+
+							differences[k - 1] = similarityBetweenPixelsf(pixel, pixelTop);
+						}
+
+						int highestIndex;
+						float highestValue = -1;
+						for (int k = 1; k < 7; k++) {
+							float delta = abs(differences[k - 1] - differences[k]);
+							
+							if (delta > highestValue) {
+								highestValue = delta;
+								highestIndex = k;
+							}
+						}
+
+						cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m" << BLOCK_HEIGHT_GRADIENT[highestIndex];
+					} else if (
+						horizontalSplit > diagonalSplit &&
+						horizontalSplit > topRight && horizontalSplit > topLeft &&
+						horizontalSplit > bottomLeft && horizontalSplit > bottomRight
+					) {
+						Vec3b left = averagePixelsi(pixelTop, pixelBottom);
+						Vec3b right = averagePixelsi(pixelTopR, pixelBottomR);
+						//cout << "\033[38;2;" << ((int) left[2]) << ";" << ((int) left[1]) << ";" << ((int) left[0]) << "m\033[48;2;" << ((int) right[2]) << ";" << ((int) right[1]) << ";" << ((int) right[0]) << "m▌";
+
+						float differences[7];
+						for (int k = 1; k < 8; k++) {
+							Vec3b pixel = RGB.at<Vec3b>(
+								(int) (i * yScale),
+								(int) (j * xScale) + ((int) (((float) k) * yScale/16))
+							);
+
+							differences[k - 1] = similarityBetweenPixelsf(pixel, left);
+						}
+
+						int highestIndex;
+						float highestValue = -1;
+						for (int k = 1; k < 7; k++) {
+							float delta = abs(differences[k - 1] - differences[k]);
+							
+							if (delta > highestValue) {
+								highestValue = delta;
+								highestIndex = k;
+							}
+						}
+
+						cout << "\033[48;2;" << ((int) right[2]) << ";" << ((int) right[1]) << ";" << ((int) right[0]) << "m\033[38;2;" << ((int) left[2]) << ";" << ((int) left[1]) << ";" << ((int) left[0]) << "m" << BLOCK_WIDTH_GRADIENT[highestIndex];
+					} else if (
+						diagonalSplit > topRight && diagonalSplit > topLeft &&
+						diagonalSplit > bottomLeft && diagonalSplit > bottomRight
+					) {
+						Vec3b B = averagePixelsi(pixelTop, pixelBottomR);
+						Vec3b A = averagePixelsi(pixelTopR, pixelBottom);
+						cout << "\033[38;2;" << ((int) A[2]) << ";" << ((int) A[1]) << ";" << ((int) A[0]) << "m\033[48;2;" << ((int) B[2]) << ";" << ((int) B[1]) << ";" << ((int) B[0]) << "m▞";
+					} else if (
+						topRight > topLeft && topRight > bottomLeft && topRight > bottomRight
+					) {
+						Vec3b A = averagePixelsi(pixelTop, pixelBottom, pixelBottomR);
+						cout << "\033[48;2;" << ((int) A[2]) << ";" << ((int) A[1]) << ";" << ((int) A[0]) << "m\033[38;2;" << ((int) pixelTopR[2]) << ";" << ((int) pixelTopR[1]) << ";" << ((int) pixelTopR[0]) << "m▝";
+					} else if (
+						topLeft > bottomLeft && topLeft > bottomRight
+					) {
+						Vec3b A = averagePixelsi(pixelTopR, pixelBottom, pixelBottomR);
+						cout << "\033[48;2;" << ((int) A[2]) << ";" << ((int) A[1]) << ";" << ((int) A[0]) << "m\033[38;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m▘";
+					} else if (
+						bottomLeft > bottomRight
+					) {
+						Vec3b A = averagePixelsi(pixelTopR, pixelTop, pixelBottomR);
+						cout << "\033[48;2;" << ((int) A[2]) << ";" << ((int) A[1]) << ";" << ((int) A[0]) << "m\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m▖";
+					} else {
+						Vec3b A = averagePixelsi(pixelTopR, pixelTop, pixelBottom);
+						cout << "\033[48;2;" << ((int) A[2]) << ";" << ((int) A[1]) << ";" << ((int) A[0]) << "m\033[38;2;" << ((int) pixelBottomR[2]) << ";" << ((int) pixelBottomR[1]) << ";" << ((int) pixelBottomR[0]) << "m▗";
+					}
+
+				} else if (COLOR_MODE == MODE_COLOR) {
 					// Obtain a second pixel
 					Vec3b pixelTop = RGB.at<Vec3b>(
 						(int) (i * yScale),
@@ -356,9 +507,9 @@ int main(int argc, char *argv[]) {
 						cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m ";
 					} else {
 						if (useUnicode) {
-							cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m" << "\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m▄";
+							cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m▄";
 						} else {
-							cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m" << "\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m_";
+							cout << "\033[48;2;" << ((int) pixelTop[2]) << ";" << ((int) pixelTop[1]) << ";" << ((int) pixelTop[0]) << "m\033[38;2;" << ((int) pixelBottom[2]) << ";" << ((int) pixelBottom[1]) << ";" << ((int) pixelBottom[0]) << "m_";
 						}
 					}
 				} else if (COLOR_MODE == MODE_MONOCHROME) {
