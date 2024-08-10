@@ -10,7 +10,7 @@
  - Dyanmic resolution mode uses many box drawing characters of differnt sizes to optimize for the best shape for each pixel
  - Plays audio from the video using ffmpeg
  - Volume controls on the fly with the keyboard or through a command line argument
- - Skipping through the video in 5 second increments with the keyboard.-
+ - Skipping through the video in 5 second increments with the keyboard.
  - Alternate color modes for terminals that don't support the normal set of ANSI color codes
 
 ## Color Modes 🎨
