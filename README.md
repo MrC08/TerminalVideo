@@ -7,6 +7,7 @@
 
  - Plays videos in all modern terminals and consoles
 	 - Everything that supports ASCII characters and ANSI codes (basically every terminal since the 90s) will work!
+ - Dyanmic resolution mode uses many box drawing characters of differnt sizes to optimize for the best shape for each pixel
  - Plays audio from the video using ffmpeg
  - Volume controls on the fly with the keyboard or through a command line argument
  - Skipping through the video in 5 second increments with the keyboard.-
